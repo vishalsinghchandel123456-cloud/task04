@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# secrets — never commit these
+.env
+.env.local
+.env.*.local
+
+# build output
+dist/
+frontend/dist/
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / OS
+.DS_Store
+.vscode/

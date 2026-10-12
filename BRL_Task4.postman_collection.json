@@ -1,0 +1,893 @@
+{
+  "info": {
+    "name": "BRL Task 4 — Real-Time Support Desk API",
+    "description": "Complete API documentation for the Real-Time Support Desk.\n\n**Setup**\n1. Set `baseUrl` (default http://localhost:5000).\n2. Run **Auth → Login (saves token)** — it stores `{{authToken}}` automatically.\n3. Run **Tickets → Create ticket (saves ticketId)** — it stores `{{ticketId}}`.\n4. For agent/admin requests log in with the matching demo account:\n   - user@support.test / Demo@123\n   - agent@support.test / Demo@123\n   - admin@support.test / Demo@123\n\nEvery protected request sends `Authorization: Bearer {{authToken}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "authToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "agentToken", "value": "" },
+    { "key": "ticketId", "value": "" },
+    { "key": "agentId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register — success (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Returns token and user', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.token).to.be.a('string');",
+                  "  pm.expect(b.user.role).to.equal('user');",
+                  "  pm.expect(b.user).to.not.have.property('password');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Person\",\n  \"email\": \"new.person@example.com\",\n  \"password\": \"secret123\"\n}"
+            },
+            "description": "Creates a normal user account. Password is hashed with bcrypt before storing. Role always defaults to `user` from the API.\n\n**201** → token + user\n**400** → missing fields / short password\n**409** → email already registered"
+          }
+        },
+        {
+          "name": "Register — validation error (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"\",\n  \"email\": \"someone@example.com\",\n  \"password\": \"123\"\n}" },
+            "description": "Missing name and a password shorter than 6 characters → **400**."
+          }
+        },
+        {
+          "name": "Register — duplicate email (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 409 Conflict', () => pm.response.to.have.status(409));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Duplicate\",\n  \"email\": \"user@support.test\",\n  \"password\": \"secret123\"\n}" },
+            "description": "Registering with an existing email → **409 Conflict** (unique index in MongoDB)."
+          }
+        },
+        {
+          "name": "Login — success (saves token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('authToken', b.token);",
+                  "pm.collectionVariables.set('userId', b.user.id);",
+                  "pm.test('authToken saved for following requests', () => pm.expect(b.token).to.be.a('string'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@support.test\",\n  \"password\": \"Demo@123\"\n}" },
+            "description": "Verifies the password with bcrypt and returns a JWT valid for 1 day. The test script stores it as `{{authToken}}`.\n\nChange the email to `agent@support.test` or `admin@support.test` to switch roles.\n\n**401** → wrong email or password (same message for both)"
+          }
+        },
+        {
+          "name": "Login — invalid credentials (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 401 Unauthorized', () => pm.response.to.have.status(401));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@support.test\",\n  \"password\": \"wrong-password\"\n}" },
+            "description": "Wrong password → **401** with a generic message so we never reveal which field was wrong."
+          }
+        },
+        {
+          "name": "Get current user /me (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('No password in response', () => pm.expect(pm.response.json().user).to.not.have.property('password'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] },
+            "description": "Protected route example — requires `Authorization: Bearer {{authToken}}`."
+          }
+        },
+        {
+          "name": "Get /me — no token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 401 Unauthorized', () => pm.response.to.have.status(401));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] },
+            "description": "Protected resources must reject unauthenticated requests → **401**."
+          }
+        },
+        {
+          "name": "Get /me — expired/invalid token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 401 Unauthorized', () => pm.response.to.have.status(401));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "eyJhbGciOiJIUzI1NiJ9.not-a-real-token", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] },
+            "description": "A garbage/expired JWT → **401 Invalid or expired token**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        {
+          "name": "Create ticket (saves ticketId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "const t = pm.response.json().ticket;",
+                  "pm.collectionVariables.set('ticketId', t._id);",
+                  "pm.test('Ticket starts as OPEN / MEDIUM', () => {",
+                  "  pm.expect(t.status).to.equal('OPEN');",
+                  "  pm.expect(t.priority).to.equal('MEDIUM');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets", "host": ["{{baseUrl}}"], "path": ["api", "tickets"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Cannot reset my password\",\n  \"description\": \"The reset email never arrives.\",\n  \"category\": \"Account\",\n  \"priority\": \"HIGH\"\n}"
+            },
+            "description": "Any logged-in user creates their own ticket. Saves `_id` as `{{ticketId}}`.\n\n**201** → created ticket\n**400** → missing title/description or invalid priority\n**401** → not logged in"
+          }
+        },
+        {
+          "name": "Create ticket — missing fields (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets", "host": ["{{baseUrl}}"], "path": ["api", "tickets"] },
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"No description here\"\n}" },
+            "description": "Missing description → **400**."
+          }
+        },
+        {
+          "name": "Create ticket — invalid priority (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets", "host": ["{{baseUrl}}"], "path": ["api", "tickets"] },
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Test\",\n  \"description\": \"Test\",\n  \"priority\": \"URGENT\"\n}" },
+            "description": "Priority outside LOW/MEDIUM/HIGH → **400** (validated in the route and by the Mongoose enum)."
+          }
+        },
+        {
+          "name": "List tickets — pagination + filters",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns pagination metadata', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.all.keys('page', 'limit', 'totalPages', 'totalItems', 'results');",
+                  "  pm.expect(b.results).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets?status=OPEN&priority=HIGH&search=email&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tickets"],
+              "query": [
+                { "key": "status", "value": "OPEN", "description": "OPEN | IN_PROGRESS | RESOLVED | CLOSED" },
+                { "key": "priority", "value": "HIGH", "description": "LOW | MEDIUM | HIGH" },
+                { "key": "search", "value": "email", "description": "matches title or description (case-insensitive)" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10", "description": "max 50" }
+              ]
+            },
+            "description": "**Role-scoped listing** — the server decides what each role sees:\n- `user` → only tickets they created\n- `agent` → only tickets assigned to them\n- `admin` → all tickets\n\nAll query params are optional."
+          }
+        },
+        {
+          "name": "List tickets — invalid status filter (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets?status=WHATEVER",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tickets"],
+              "query": [{ "key": "status", "value": "WHATEVER" }]
+            },
+            "description": "Unknown status filter → **400**."
+          }
+        },
+        {
+          "name": "List tickets — no token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 401 Unauthorized', () => pm.response.to.have.status(401));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tickets", "host": ["{{baseUrl}}"], "path": ["api", "tickets"] },
+            "description": "Unauthenticated listing → **401**."
+          }
+        },
+        {
+          "name": "Get ticket by id (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 200 OK', () => pm.response.to.have.status(200));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}"] },
+            "description": "Allowed for the creator, the assigned agent, and any admin. Others get **403**."
+          }
+        },
+        {
+          "name": "Get ticket — not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 404 Not Found', () => pm.response.to.have.status(404));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tickets/64b000000000000000000000", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "64b000000000000000000000"] },
+            "description": "Well-formed but non-existent id → **404**."
+          }
+        },
+        {
+          "name": "Get ticket — forbidden (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{agentToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}"] },
+            "description": "Log in as `agent@support.test` (Agent → Agent Token script) first. An agent who is not assigned to this ticket gets **403**.\n\nKnowing an id is not enough — the backend checks ownership on every request."
+          }
+        },
+        {
+          "name": "Update ticket details (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 200 OK', () => pm.response.to.have.status(200));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}"] },
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Cannot reset my password (updated)\",\n  \"priority\": \"HIGH\"\n}" },
+            "description": "Only the ticket creator (or an admin) can edit, and not after closing → otherwise **403** / **400**."
+          }
+        },
+        {
+          "name": "Update status — agent/admin (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Status changed', () => pm.expect(pm.response.json().ticket.status).to.equal('IN_PROGRESS'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{agentToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "status"] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}" },
+            "description": "Roles: `agent` (assigned tickets only) and `admin` (any ticket).\n\nThe change is saved over REST **and broadcast** to the ticket room as `ticket_updated`, so every open client updates instantly."
+          }
+        },
+        {
+          "name": "Update status — invalid value (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{agentToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "status"] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"DONE\"\n}" },
+            "description": "Invalid ticket status → **400**."
+          }
+        },
+        {
+          "name": "Update status — as normal user (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "status"] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"RESOLVED\"\n}" },
+            "description": "RBAC: a plain `user` is not allowed to change status → **403** (checked in the backend, not the frontend)."
+          }
+        },
+        {
+          "name": "Assign to agent — admin (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Assigned and moved to IN_PROGRESS', () => {",
+                  "  const t = pm.response.json().ticket;",
+                  "  pm.expect(t.assignedTo).to.not.equal(null);",
+                  "  pm.expect(t.status).to.equal('IN_PROGRESS');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/assign", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "assign"] },
+            "body": { "mode": "raw", "raw": "{\n  \"agentId\": \"{{agentId}}\"\n}" },
+            "description": "Admin only. Get `{{agentId}}` from **Admin → List agents**. An OPEN ticket becomes IN_PROGRESS when assigned.\n\nUse `{{adminToken}}` (run **Agent Token → Admin Token** script first)."
+          }
+        },
+        {
+          "name": "Assign — as non-admin (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/assign", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "assign"] },
+            "body": { "mode": "raw", "raw": "{\n  \"agentId\": \"{{agentId}}\"\n}" },
+            "description": "Only admins may assign → **403** for user/agent tokens."
+          }
+        },
+        {
+          "name": "Assign — non-agent id (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 404 Not Found', () => pm.response.to.have.status(404));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/assign", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "assign"] },
+            "body": { "mode": "raw", "raw": "{\n  \"agentId\": \"{{userId}}\"\n}" },
+            "description": "Assigning someone who is not an agent (uses your own `{{userId}}`) → **404 Support agent not found**."
+          }
+        },
+        {
+          "name": "Close ticket (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Ticket is CLOSED', () => pm.expect(pm.response.json().ticket.status).to.equal('CLOSED'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/close", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "close"] },
+            "description": "Allowed for the creator, the assigned agent, or an admin. After closing: editing (400) and new messages (400) are rejected."
+          }
+        },
+        {
+          "name": "Close ticket — unrelated user (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{agentToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/close", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "close"] },
+            "description": "An agent who is not assigned (and is not admin/creator) → **403**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "List messages (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Paginated conversation', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.results).to.be.an('array');",
+                  "  pm.expect(b).to.have.property('totalItems');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/messages?page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tickets", "{{ticketId}}", "messages"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "50" }
+              ]
+            },
+            "description": "Full conversation history for a ticket, returned in chronological order (newest page first).\n\nAccess rules identical to viewing the ticket → **403** for strangers."
+          }
+        },
+        {
+          "name": "Send message — REST (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 201 Created', () => pm.response.to.have.status(201));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/messages", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "messages"] },
+            "body": { "mode": "raw", "raw": "{\n  \"text\": \"Hello from REST!\"\n}" },
+            "description": "Sending also broadcasts `new_message` to the socket room, so open clients update live even for REST sends.\n\nThe frontend normally sends over WebSockets (`send_message` event); this REST route documents the same rules."
+          }
+        },
+        {
+          "name": "Send message — empty text (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/messages", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "messages"] },
+            "body": { "mode": "raw", "raw": "{\n  \"text\": \"   \"\n}" },
+            "description": "Blank/whitespace message → **400**."
+          }
+        },
+        {
+          "name": "Send message — closed ticket (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/messages", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "messages"] },
+            "body": { "mode": "raw", "raw": "{\n  \"text\": \"Too late!\"\n}" },
+            "description": "Run **Tickets → Close ticket** first. Messages on a CLOSED ticket → **400** (same rule enforced on the socket)."
+          }
+        },
+        {
+          "name": "Send message — no token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 401 Unauthorized', () => pm.response.to.have.status(401));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/tickets/{{ticketId}}/messages", "host": ["{{baseUrl}}"], "path": ["api", "tickets", "{{ticketId}}", "messages"] },
+            "body": { "mode": "raw", "raw": "{\n  \"text\": \"anonymous\"\n}" },
+            "description": "Unauthenticated → **401**."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Admin Token (login as admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);",
+                  "pm.test('adminToken saved', () => pm.expect(pm.response.json().user.role).to.equal('admin'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@support.test\",\n  \"password\": \"Demo@123\"\n}" },
+            "description": "Saves `{{adminToken}}` — run this before the admin requests."
+          }
+        },
+        {
+          "name": "Agent Token (login as agent)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('agentToken', pm.response.json().token);",
+                  "pm.test('agentToken saved', () => pm.expect(pm.response.json().user.role).to.equal('agent'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"agent@support.test\",\n  \"password\": \"Demo@123\"\n}" },
+            "description": "Saves `{{agentToken}}` — run this before agent-only requests (e.g. Get ticket — forbidden)."
+          }
+        },
+        {
+          "name": "List users (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "const agents = pm.response.json().results.filter(u => u.role === 'agent');",
+                  "if (agents.length) pm.collectionVariables.set('agentId', agents[0]._id);",
+                  "pm.test('Returns users array', () => pm.expect(pm.response.json().results).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users?role=agent",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"],
+              "query": [{ "key": "role", "value": "agent", "description": "optional: user | agent | admin" }]
+            },
+            "description": "Admin only → **403** otherwise. Saves the first agent's id as `{{agentId}}` (used by Assign ticket)."
+          }
+        },
+        {
+          "name": "Change user role (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Role updated', () => pm.expect(pm.response.json().user.role).to.equal('agent'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "role"] },
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"agent\"\n}" },
+            "description": "Promote/demote between `user`, `agent`, `admin`. Uses `{{userId}}` from the /me test script.\n\nChanging your own role → 400; unknown user → 404; invalid role → 400."
+          }
+        },
+        {
+          "name": "Change role — invalid value (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "role"] },
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"superuser\"\n}" },
+            "description": "Role outside user/agent/admin → **400**."
+          }
+        },
+        {
+          "name": "Admin endpoint — as normal user (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"] },
+            "description": "RBAC: `authorize('admin')` rejects non-admin tokens → **403**."
+          }
+        },
+        {
+          "name": "Stats (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 200 OK', () => pm.response.to.have.status(200));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/admin/stats", "host": ["{{baseUrl}}"], "path": ["api", "admin", "stats"] },
+            "description": "Counts of users, tickets and open tickets."
+          }
+        },
+        {
+          "name": "Health check (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('Status 200 OK', () => pm.response.to.have.status(200));"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
+            "description": "No auth required — used to check the deployment is awake (Render)."
+          }
+        }
+      ]
+    }
+  ]
+}

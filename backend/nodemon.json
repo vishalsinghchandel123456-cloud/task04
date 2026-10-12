@@ -1,0 +1,4 @@
+{
+  "watch": ["server.js", "socket.js", "db.js", "routes", "models", "middleware"],
+  "ignore": ["scripts/*", "*.log", "node_modules"]
+}

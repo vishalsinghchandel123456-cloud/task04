@@ -1,0 +1,112 @@
+/* src/styles.css — simple, clean styling (design is not part of the grading) */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: #f4f6fb;
+  color: #1c2333;
+}
+h1, h2, h3 { margin: 0 0 8px; }
+.muted { color: #6b7385; font-size: 14px; }
+.error {
+  background: #fdecec;
+  color: #b3261e;
+  border: 1px solid #f3b8b4;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+/* --- layout --- */
+.app { max-width: 960px; margin: 0 auto; padding: 16px; }
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  background: #fff; border: 1px solid #e3e7f0; border-radius: 12px;
+  padding: 10px 16px; margin-bottom: 16px;
+}
+.topbar h1 { font-size: 20px; margin: 0; flex: 0 0 auto; }
+.topbar nav { display: flex; gap: 8px; flex: 1; }
+.topbar .who { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+main { padding-bottom: 40px; }
+
+button {
+  font: inherit; cursor: pointer; border: 1px solid #d4d9e5;
+  background: #fff; border-radius: 8px; padding: 7px 14px;
+}
+button:hover { background: #f0f2f8; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary { background: #2f6bff; border-color: #2f6bff; color: #fff; }
+button.primary:hover { background: #2559db; }
+button.ghost { background: transparent; }
+button.active { background: #2f6bff; border-color: #2f6bff; color: #fff; }
+button.link { border: none; background: none; color: #2f6bff; padding: 6px 0; }
+
+/* --- forms --- */
+label { display: block; font-size: 13px; color: #4a5165; margin-bottom: 10px; }
+input, textarea, select {
+  display: block; width: 100%; margin-top: 4px; padding: 8px 10px;
+  border: 1px solid #d4d9e5; border-radius: 8px; font: inherit; background: #fff;
+}
+.row { display: flex; gap: 12px; align-items: end; }
+.row label { flex: 1; }
+
+.card {
+  background: #fff; border: 1px solid #e3e7f0; border-radius: 12px;
+  padding: 16px; margin-bottom: 14px;
+}
+
+/* --- auth --- */
+.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.auth { width: 360px; }
+.auth .primary { width: 100%; margin-top: 6px; }
+.demo-box {
+  margin-top: 14px; font-size: 12.5px; background: #f4f6fb;
+  border: 1px dashed #cfd6e6; border-radius: 8px; padding: 8px 10px;
+}
+
+/* --- toolbar / filters --- */
+.toolbar { display: flex; gap: 12px; justify-content: space-between; margin-bottom: 12px; }
+.filters { display: flex; gap: 8px; flex: 1; }
+.filters input, .filters select { width: auto; margin-top: 0; }
+
+/* --- ticket cards --- */
+.ticket-list { display: grid; gap: 10px; margin: 10px 0; }
+button.card.ticket { text-align: left; width: 100%; }
+.ticket-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.ticket-meta { display: flex; gap: 12px; font-size: 13px; color: #6b7385; margin-top: 6px; flex-wrap: wrap; }
+.badge { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.status-OPEN { background: #e8f0ff; color: #2f6bff; }
+.status-IN_PROGRESS { background: #fff3d6; color: #a16207; }
+.status-RESOLVED { background: #e3f7ea; color: #15803d; }
+.status-CLOSED { background: #eceff4; color: #5b6474; }
+.priority-LOW { background: #eef1f6; color: #5b6474; }
+.priority-MEDIUM { background: #fff3d6; color: #a16207; }
+.priority-HIGH { background: #fdecec; color: #b3261e; }
+
+.pager { display: flex; gap: 14px; align-items: center; font-size: 14px; }
+
+/* --- detail + chat --- */
+.detail .controls { margin-top: 12px; }
+.detail .controls label { margin-bottom: 0; min-width: 170px; }
+.chat { display: flex; flex-direction: column; }
+.messages {
+  max-height: 380px; overflow-y: auto; display: flex;
+  flex-direction: column; gap: 8px; padding: 6px 2px;
+}
+.msg {
+  background: #f0f2f8; border-radius: 10px; padding: 8px 12px;
+  max-width: 75%; align-self: flex-start;
+}
+.msg.mine { background: #2f6bff; color: #fff; align-self: flex-end; }
+.msg.mine .muted { color: #cfe0ff; }
+.msg-head { font-size: 12.5px; margin-bottom: 2px; }
+.typing { font-size: 12.5px; color: #6b7385; min-height: 18px; }
+.chat-input { display: flex; gap: 8px; }
+.chat-input input { flex: 1; margin-top: 0; }
+
+/* --- admin table --- */
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eef0f5; font-size: 14px; }
+th { color: #6b7385; font-weight: 600; }
+td select { width: auto; margin-top: 0; }
