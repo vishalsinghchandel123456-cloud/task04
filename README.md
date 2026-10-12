@@ -201,5 +201,4 @@ Three questions you will almost certainly be asked:
    connection/request rejected with 401 before any handler runs.
 3. **"Why WebSockets instead of polling?"** — the server pushes instantly to a
    room of only the participants; no repeated empty requests, low latency.
-#   t a s k 0 4  
- 
+#
